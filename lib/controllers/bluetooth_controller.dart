@@ -157,7 +157,8 @@ class BluetoothController extends GetxController {
     }
   }
 
-  Future<void> sendZero(flutter_blue.BluetoothDevice device) async {
+  Future<void> sendBatteryInfo(flutter_blue.BluetoothDevice device,
+      int currentBattery, int targetBattery) async {
     try {
       if (!await _requestPermissions()) {
         return;
@@ -173,47 +174,42 @@ class BluetoothController extends GetxController {
         for (var characteristic in service.characteristics) {
           if (characteristic.properties.write ||
               characteristic.properties.writeWithoutResponse) {
-            await characteristic.write([0],
+            // First send the target percentage
+            List<int> targetData = targetBattery.toString().codeUnits;
+            await characteristic.write(targetData,
                 withoutResponse:
                     characteristic.properties.writeWithoutResponse);
-            statusMessage.value = 'Sent 0 to ${getDeviceName(device)}';
+
+            // Then send the command (up/down) based on current vs target
+            List<int> command;
+            if (currentBattery < targetBattery) {
+              command = "up".codeUnits; // Start charging
+              statusMessage.value = 'Starting charging until $targetBattery%';
+            } else {
+              command = "down".codeUnits; // Stop charging
+              statusMessage.value = 'Stopping charging - target reached';
+            }
+
+            await Future.delayed(const Duration(
+                milliseconds: 100)); // Small delay between commands
+            await characteristic.write(command,
+                withoutResponse:
+                    characteristic.properties.writeWithoutResponse);
             return;
           }
         }
       }
       statusMessage.value = 'Error: No writable characteristic found';
     } catch (e) {
-      statusMessage.value = 'Error sending data: $e';
+      statusMessage.value = 'Error sending battery info: $e';
     }
   }
 
-  Future<void> sendOne(flutter_blue.BluetoothDevice device) async {
-    try {
-      if (!await _requestPermissions()) {
-        return;
-      }
-
-      if (!device.isConnected) {
-        statusMessage.value = 'Error: Device is not connected';
-        return;
-      }
-
-      final services = await device.discoverServices();
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write ||
-              characteristic.properties.writeWithoutResponse) {
-            await characteristic.write([1],
-                withoutResponse:
-                    characteristic.properties.writeWithoutResponse);
-            statusMessage.value = 'Sent 1 to ${getDeviceName(device)}';
-            return;
-          }
-        }
-      }
-      statusMessage.value = 'Error: No writable characteristic found';
-    } catch (e) {
-      statusMessage.value = 'Error sending data: $e';
+  Future<void> updateChargingStatus(flutter_blue.BluetoothDevice device,
+      int currentBattery, int targetBattery) async {
+    // This method can be called periodically or when battery level changes
+    if (device.isConnected) {
+      await sendBatteryInfo(device, currentBattery, targetBattery);
     }
   }
 }

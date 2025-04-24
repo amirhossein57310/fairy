@@ -33,6 +33,7 @@ dependencies:
   get: ^4.6.6
   permission_handler: ^11.3.0
   flutter_blue_plus: ^1.31.13
+  battery_plus: ^5.0.3
   cupertino_icons: ^1.0.2
   platform: ^3.1.0
 

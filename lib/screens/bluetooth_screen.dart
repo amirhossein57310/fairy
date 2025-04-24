@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
 import '../controllers/bluetooth_controller.dart';
+import '../controllers/battery_controller.dart';
 
 class BluetoothScreen extends StatelessWidget {
   final BluetoothController controller = Get.find<BluetoothController>();
+  final BatteryController batteryController = Get.put(BatteryController());
 
   BluetoothScreen({super.key});
 
@@ -21,6 +23,66 @@ class BluetoothScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Battery Information Card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Current Battery Level
+                        Obx(() => Text(
+                              'Current Battery: ${batteryController.currentBatteryLevel.value}%',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )),
+                        const SizedBox(height: 16),
+                        // Target Battery Level Slider
+                        Row(
+                          children: [
+                            const Text('Target Battery: '),
+                            Expanded(
+                              child: Obx(() => Slider(
+                                    value: batteryController
+                                        .targetBatteryLevel.value
+                                        .toDouble(),
+                                    min: 0,
+                                    max: 100,
+                                    divisions: 100,
+                                    label:
+                                        '${batteryController.targetBatteryLevel.value}%',
+                                    onChanged: (value) {
+                                      batteryController
+                                          .setTargetBatteryLevel(value.round());
+                                      // Update ESP32 when target changes
+                                      final connectedDevices = controller
+                                          .devices
+                                          .where((device) => controller
+                                              .isDeviceConnected(device));
+                                      for (var device in connectedDevices) {
+                                        controller.sendBatteryInfo(
+                                          device,
+                                          batteryController
+                                              .currentBatteryLevel.value,
+                                          value.round(),
+                                        );
+                                      }
+                                    },
+                                  )),
+                            ),
+                            Obx(() => Text(
+                                '${batteryController.targetBatteryLevel.value}%')),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
                 // Status message
                 Obx(() => Text(
                       controller.statusMessage.value,
@@ -76,7 +138,21 @@ class BluetoothScreen extends StatelessWidget {
                                       if (isConnected) {
                                         controller.disconnectFromDevice(device);
                                       } else {
-                                        controller.connectToDevice(device);
+                                        controller
+                                            .connectToDevice(device)
+                                            .then((_) {
+                                          // Send initial battery info after connection
+                                          if (controller
+                                              .isDeviceConnected(device)) {
+                                            controller.sendBatteryInfo(
+                                              device,
+                                              batteryController
+                                                  .currentBatteryLevel.value,
+                                              batteryController
+                                                  .targetBatteryLevel.value,
+                                            );
+                                          }
+                                        });
                                       }
                                     },
                                     style: ElevatedButton.styleFrom(
