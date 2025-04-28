@@ -2,11 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:async';
+import 'dart:io';
 
 class BluetoothController extends GetxController {
   final RxList<flutter_blue.BluetoothDevice> devices =
       <flutter_blue.BluetoothDevice>[].obs;
   final RxString statusMessage = ''.obs;
+
+  bool _isLocked = false;
+  Completer<void>? _lock;
+
+  Future<void> _takeMutex() async {
+    while (_isLocked) {
+      _lock = Completer<void>();
+      await _lock?.future;
+    }
+    _isLocked = true;
+  }
+
+  void _giveMutex() {
+    _isLocked = false;
+    if (_lock != null && !_lock!.isCompleted) {
+      _lock!.complete();
+    }
+    _lock = null;
+  }
 
   Future<bool> _requestPermissions() async {
     if (await Permission.bluetoothConnect.request().isGranted) {
@@ -210,6 +231,117 @@ class BluetoothController extends GetxController {
     // This method can be called periodically or when battery level changes
     if (device.isConnected) {
       await sendBatteryInfo(device, currentBattery, targetBattery);
+    }
+  }
+
+  Future<void> sendZero(flutter_blue.BluetoothDevice device) async {
+    try {
+      await _takeMutex();
+      final state = await device.connectionState.first;
+      if (state != flutter_blue.BluetoothConnectionState.connected) {
+        throw Exception('Device is not connected');
+      }
+
+      final services = await device.discoverServices();
+      for (var service in services) {
+        for (var characteristic in service.characteristics) {
+          if (characteristic.properties.write) {
+            await characteristic.write([0], withoutResponse: false);
+            update(['bluetooth_status']);
+            return;
+          }
+        }
+      }
+      throw Exception('No writable characteristic found');
+    } catch (e) {
+      print('Error sending zero: $e');
+      update(['bluetooth_status']);
+    } finally {
+      _giveMutex();
+    }
+  }
+
+  Future<void> sendOne(flutter_blue.BluetoothDevice device) async {
+    try {
+      await _takeMutex();
+      final state = await device.connectionState.first;
+      if (state != flutter_blue.BluetoothConnectionState.connected) {
+        throw Exception('Device is not connected');
+      }
+
+      final services = await device.discoverServices();
+      for (var service in services) {
+        for (var characteristic in service.characteristics) {
+          if (characteristic.properties.write) {
+            await characteristic.write([1], withoutResponse: false);
+            update(['bluetooth_status']);
+            return;
+          }
+        }
+      }
+      throw Exception('No writable characteristic found');
+    } catch (e) {
+      print('Error sending one: $e');
+      update(['bluetooth_status']);
+    } finally {
+      _giveMutex();
+    }
+  }
+
+  Future<void> sendString(
+      flutter_blue.BluetoothDevice device, String value) async {
+    try {
+      await _takeMutex();
+      final state = await device.connectionState.first;
+      if (state != flutter_blue.BluetoothConnectionState.connected) {
+        throw Exception('Device is not connected');
+      }
+
+      final services = await device.discoverServices();
+      for (var service in services) {
+        for (var characteristic in service.characteristics) {
+          if (characteristic.properties.write) {
+            await characteristic.write(value.codeUnits, withoutResponse: false);
+            update(['bluetooth_status']);
+            return;
+          }
+        }
+      }
+      throw Exception('No writable characteristic found');
+    } catch (e) {
+      print('Error sending string: $e');
+      update(['bluetooth_status']);
+    } finally {
+      _giveMutex();
+    }
+  }
+
+  void closeApp() {
+    // Disconnect all devices before closing
+    for (var device in devices) {
+      if (device.isConnected) {
+        device.disconnect();
+      }
+    }
+    // Exit the app
+    exit(0);
+  }
+
+  @override
+  void onInit() async {
+    super.onInit();
+    // Request permissions first
+    if (await _requestPermissions()) {
+      // Try to enable Bluetooth if it's off
+      if (!await flutter_blue.FlutterBluePlus.isOn) {
+        try {
+          await flutter_blue.FlutterBluePlus.turnOn();
+        } catch (e) {
+          statusMessage.value = 'Please enable Bluetooth manually';
+        }
+      }
+      // Start scanning after permissions and Bluetooth check
+      showSystemDevices();
     }
   }
 }

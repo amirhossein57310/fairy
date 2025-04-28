@@ -1,193 +1,393 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:io' show Platform;
 import 'package:get/get.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../controllers/bluetooth_controller.dart';
 import '../controllers/battery_controller.dart';
 
 class BluetoothScreen extends StatelessWidget {
   final BluetoothController controller = Get.find<BluetoothController>();
   final BatteryController batteryController = Get.put(BatteryController());
+  final RxBool isCharging = false.obs;
 
   BluetoothScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Paired Bluetooth Devices'),
+    final theme = Theme.of(context);
+    return WillPopScope(
+      onWillPop: () async {
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exit App'),
+            content: const Text('Do you want to close the app?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, true);
+                  _closeApp();
+                },
+                child: const Text('Yes'),
+              ),
+            ],
+          ),
+        );
+        return shouldPop ?? false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Fairy Bluetooth'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => controller.showSystemDevices(),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            _buildStatusCard(theme),
+            _buildDevicesList(theme),
+            _buildChargingControl(theme),
+          ],
+        ),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Battery Information Card
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Current Battery Level
-                        Obx(() => Text(
-                              'Current Battery: ${batteryController.currentBatteryLevel.value}%',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )),
-                        const SizedBox(height: 16),
-                        // Target Battery Level Slider
-                        Row(
-                          children: [
-                            const Text('Target Battery: '),
-                            Expanded(
-                              child: Obx(() => Slider(
-                                    value: batteryController
-                                        .targetBatteryLevel.value
-                                        .toDouble(),
-                                    min: 0,
-                                    max: 100,
-                                    divisions: 100,
-                                    label:
-                                        '${batteryController.targetBatteryLevel.value}%',
-                                    onChanged: (value) {
-                                      batteryController
-                                          .setTargetBatteryLevel(value.round());
-                                      // Update ESP32 when target changes
-                                      final connectedDevices = controller
-                                          .devices
-                                          .where((device) => controller
-                                              .isDeviceConnected(device));
-                                      for (var device in connectedDevices) {
-                                        controller.sendBatteryInfo(
-                                          device,
-                                          batteryController
-                                              .currentBatteryLevel.value,
-                                          value.round(),
-                                        );
-                                      }
-                                    },
-                                  )),
-                            ),
-                            Obx(() => Text(
-                                '${batteryController.targetBatteryLevel.value}%')),
-                          ],
-                        ),
-                      ],
+    );
+  }
+
+  Widget _buildStatusCard(ThemeData theme) {
+    return Obx(() => Container(
+          margin: const EdgeInsets.all(16),
+          child: Card(
+            elevation: 0,
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      color: theme.colorScheme.primary,
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Status message
-                Obx(() => Text(
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
                       controller.statusMessage.value,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    )),
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+  }
 
-                const SizedBox(height: 16),
+  Widget _buildDevicesList(ThemeData theme) {
+    return Expanded(
+      child: Obx(() => ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: controller.devices.length,
+            itemBuilder: (context, index) {
+              final device = controller.devices[index];
+              final isConnected = controller.isDeviceConnected(device);
+              final isConnecting = controller.isDeviceConnecting(device);
 
-                // Show devices button
-                ElevatedButton(
-                  onPressed: () => controller.showSystemDevices(),
-                  child: const Text('Show Paired Devices'),
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: isConnected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline.withOpacity(0.2),
+                    width: 1,
+                  ),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Device list
-                Obx(() {
-                  if (controller.devices.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text('No paired Bluetooth devices found'),
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: controller.devices.length,
-                    itemBuilder: (context, index) {
-                      final device = controller.devices[index];
-                      final isConnected = controller.isDeviceConnected(device);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => isConnected
+                      ? controller.disconnectFromDevice(device)
+                      : controller.connectToDevice(device),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isConnected
+                                ? theme.colorScheme.primary.withOpacity(0.1)
+                                : theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isConnected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.bluetooth_rounded,
+                            color: isConnected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              ListTile(
-                                title: Text(controller.getDeviceName(device)),
-                                subtitle: Text(
-                                    'MAC: ${controller.getDeviceId(device)}'),
+                              Text(
+                                controller.getDeviceName(device),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isConnected
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurface,
+                                ),
                               ),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      if (isConnected) {
-                                        controller.disconnectFromDevice(device);
-                                      } else {
-                                        controller
-                                            .connectToDevice(device)
-                                            .then((_) {
-                                          // Send initial battery info after connection
-                                          if (controller
-                                              .isDeviceConnected(device)) {
-                                            controller.sendBatteryInfo(
-                                              device,
-                                              batteryController
-                                                  .currentBatteryLevel.value,
-                                              batteryController
-                                                  .targetBatteryLevel.value,
-                                            );
-                                          }
-                                        });
-                                      }
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isConnected
-                                          ? Colors.red
-                                          : Colors.blue,
-                                    ),
-                                    child: Text(
-                                        isConnected ? 'Disconnect' : 'Connect'),
-                                  ),
-                                  if (isConnected) ...[
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          controller.sendTestMessage(device),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                      ),
-                                      child: const Text('Test Message'),
-                                    ),
-                                  ],
-                                ],
+                              const SizedBox(height: 4),
+                              Text(
+                                controller.getDeviceId(device),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      );
+                        if (isConnecting)
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.colorScheme.primary,
+                              ),
+                            ),
+                          )
+                        else
+                          Icon(
+                            isConnected
+                                ? Icons.link_rounded
+                                : Icons.link_off_rounded,
+                            color: isConnected
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          )),
+    );
+  }
+
+  Widget _buildChargingControl(ThemeData theme) {
+    return Obx(() {
+      final bool hasConnectedDevice = controller.devices
+          .any((device) => controller.isDeviceConnected(device));
+      final connectedDevice = controller.devices.firstWhereOrNull(
+        (device) => controller.isDeviceConnected(device),
+      );
+      final targetBattery = batteryController.targetBatteryLevel.value;
+      final currentBattery = batteryController.currentBatteryLevel.value;
+
+      if (!hasConnectedDevice || connectedDevice == null) {
+        return const SizedBox.shrink();
+      }
+
+      return Container(
+        margin: const EdgeInsets.all(16),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Battery Level Display
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Current Battery: $currentBattery%',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Target: $targetBattery%',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Battery Level Slider
+                SliderTheme(
+                  data: SliderThemeData(
+                    activeTrackColor: theme.colorScheme.primary,
+                    inactiveTrackColor:
+                        theme.colorScheme.primary.withOpacity(0.2),
+                    thumbColor: theme.colorScheme.primary,
+                    overlayColor: theme.colorScheme.primary.withOpacity(0.1),
+                    trackHeight: 4,
+                  ),
+                  child: Slider(
+                    value: targetBattery.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 100,
+                    label: '$targetBattery%',
+                    onChanged: (value) {
+                      batteryController.setTargetBatteryLevel(value.round());
+                      // Update ESP32 when target changes
+                      if (isCharging.value) {
+                        controller.sendBatteryInfo(
+                          connectedDevice,
+                          currentBattery,
+                          value.round(),
+                        );
+                      }
                     },
-                  );
-                }),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Charging Control',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () {
+                    isCharging.value = !isCharging.value;
+                    if (isCharging.value) {
+                      controller.sendString(connectedDevice, "true");
+                    } else {
+                      controller.sendString(connectedDevice, "false");
+                    }
+                  },
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isCharging.value
+                            ? [
+                                theme.colorScheme.primary,
+                                theme.colorScheme.primary.withOpacity(0.8),
+                              ]
+                            : [
+                                Colors.grey.shade300,
+                                Colors.grey.shade400,
+                              ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isCharging.value
+                                  ? theme.colorScheme.primary
+                                  : Colors.grey)
+                              .withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      child: Icon(
+                        isCharging.value
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isCharging.value
+                      ? 'Charging to $targetBattery%'
+                      : 'Not Charging',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: isCharging.value
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
         ),
-      ),
-    );
+      );
+    });
+  }
+
+  Future<void> _closeApp() async {
+    // Stop background service
+    FlutterBackgroundService().invoke('stopService');
+    // Disconnect all devices
+    for (var device in controller.devices) {
+      if (controller.isDeviceConnected(device)) {
+        await device.disconnect();
+      }
+    }
+    if (Platform.isAndroid) {
+      // Android-specific: Remove task from recent apps and exit
+      const platform = MethodChannel('com.fairy.app/system');
+      try {
+        await platform.invokeMethod('removeFromRecents');
+      } catch (e) {
+        print('Error removing from recents: $e');
+      }
+    }
+    // Force exit the app
+    SystemNavigator.pop(animated: true);
   }
 }

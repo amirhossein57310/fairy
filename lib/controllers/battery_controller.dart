@@ -1,12 +1,15 @@
 import 'package:get/get.dart';
 import 'package:battery_plus/battery_plus.dart';
-import '../controllers/bluetooth_controller.dart';
+import 'package:fairy_app/controllers/bluetooth_controller.dart';
 
 class BatteryController extends GetxController {
   final Battery _battery = Battery();
   final RxInt currentBatteryLevel = 0.obs;
   final RxInt targetBatteryLevel = 100.obs;
   late final BluetoothController _bluetoothController;
+
+  // Getter for battery level
+  int get batteryLevel => currentBatteryLevel.value;
 
   @override
   void onInit() {
@@ -20,10 +23,16 @@ class BatteryController extends GetxController {
   void onReady() {
     super.onReady();
     // Get initial battery level immediately
-    _updateBatteryLevel();
+    updateBatteryLevel();
   }
 
-  Future<void> _updateBatteryLevel() async {
+  // Initialize battery monitoring
+  Future<void> initBattery() async {
+    await updateBatteryLevel();
+    _startBatteryMonitoring();
+  }
+
+  Future<void> updateBatteryLevel() async {
     try {
       final batteryLevel = await _battery.batteryLevel;
 
@@ -56,17 +65,17 @@ class BatteryController extends GetxController {
 
   void _startBatteryMonitoring() {
     // Update battery level immediately
-    _updateBatteryLevel();
+    updateBatteryLevel();
 
     // Listen to battery level changes
     _battery.onBatteryStateChanged.listen((BatteryState state) {
-      _updateBatteryLevel();
+      updateBatteryLevel();
     });
 
     // Set up periodic updates every 10 seconds to ensure we don't miss any changes
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 10));
-      await _updateBatteryLevel();
+      await updateBatteryLevel();
       return true;
     });
   }
