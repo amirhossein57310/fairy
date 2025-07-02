@@ -4,14 +4,55 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:get_storage/get_storage.dart';
 
 class BluetoothController extends GetxController {
   final RxList<flutter_blue.BluetoothDevice> devices =
       <flutter_blue.BluetoothDevice>[].obs;
   final RxString statusMessage = ''.obs;
+  final Rx<flutter_blue.BluetoothDevice?> lastConnectedDevice =
+      Rx<flutter_blue.BluetoothDevice?>(null);
+  static const String LAST_DEVICE_ID_KEY = 'last_connected_device_id';
+  final _storage = GetStorage();
 
   bool _isLocked = false;
   Completer<void>? _lock;
+
+  @override
+  void onInit() async {
+    super.onInit();
+
+    // Check if Bluetooth is on, if not request to turn it on
+    if (!await flutter_blue.FlutterBluePlus.isAvailable) {
+      statusMessage.value = "Bluetooth is not available on this device";
+      return;
+    }
+
+    if (!await flutter_blue.FlutterBluePlus.isOn) {
+      statusMessage.value = "Please turn on Bluetooth";
+      // Request to turn on Bluetooth
+      await flutter_blue.FlutterBluePlus.turnOn();
+      // Wait for Bluetooth to turn on
+      await Future.delayed(const Duration(seconds: 2));
+      if (!await flutter_blue.FlutterBluePlus.isOn) {
+        statusMessage.value = "Failed to turn on Bluetooth";
+        return;
+      }
+    }
+
+    // Load last connected device ID
+    final lastDeviceId = _storage.read(LAST_DEVICE_ID_KEY);
+    if (lastDeviceId != null) {
+      // Try to find and connect to the last device
+      final pairedDevices = await flutter_blue.FlutterBluePlus.bondedDevices;
+      final lastDevice = pairedDevices.firstWhereOrNull(
+          (device) => device.remoteId.toString() == lastDeviceId);
+      if (lastDevice != null) {
+        lastConnectedDevice.value = lastDevice;
+        await connectToDevice(lastDevice);
+      }
+    }
+  }
 
   Future<void> _takeMutex() async {
     while (_isLocked) {
@@ -39,20 +80,29 @@ class BluetoothController extends GetxController {
 
   Future<void> showSystemDevices() async {
     try {
-      // Request permissions first
       if (!await _requestPermissions()) {
         return;
       }
 
-      // Clear previous devices
       devices.clear();
       statusMessage.value = "Getting paired devices...";
 
-      // Get paired devices from system
       List<flutter_blue.BluetoothDevice> pairedDevices =
           await flutter_blue.FlutterBluePlus.bondedDevices;
 
-      // Add found devices to the list
+      // If we have a last connected device, only show that one
+      if (lastConnectedDevice.value != null) {
+        final lastDevice = pairedDevices.firstWhereOrNull((device) =>
+            device.remoteId.toString() ==
+            lastConnectedDevice.value!.remoteId.toString());
+        if (lastDevice != null) {
+          devices.add(lastDevice);
+          statusMessage.value = "Found last connected device";
+          return;
+        }
+      }
+
+      // Otherwise show all paired devices
       for (var device in pairedDevices) {
         devices.add(device);
       }
@@ -88,19 +138,25 @@ class BluetoothController extends GetxController {
 
   Future<void> connectToDevice(flutter_blue.BluetoothDevice device) async {
     try {
-      // Request permissions first
       if (!await _requestPermissions()) {
         return;
       }
 
       statusMessage.value = "Connecting to ${getDeviceName(device)}...";
 
-      // Connect to the device
       await device.connect();
-
-      // Discover services after connection
-      statusMessage.value = "Discovering services...";
       await device.discoverServices();
+
+      // Store the connected device
+      lastConnectedDevice.value = device;
+      await _storage.write(LAST_DEVICE_ID_KEY, device.remoteId.toString());
+
+      // Update device list to show only the connected device
+      devices.clear();
+      devices.add(device);
+
+      // Send "up" command when connected
+      await sendString(device, "up");
 
       statusMessage.value = "Connected to ${getDeviceName(device)}";
     } catch (e) {
@@ -110,15 +166,21 @@ class BluetoothController extends GetxController {
 
   Future<void> disconnectFromDevice(flutter_blue.BluetoothDevice device) async {
     try {
-      // Request permissions first
       if (!await _requestPermissions()) {
         return;
       }
 
       statusMessage.value = "Disconnecting from ${getDeviceName(device)}...";
 
-      // Disconnect from the device
+      // Send "down" command before disconnecting
+      await sendString(device, "down");
+
       await device.disconnect();
+      lastConnectedDevice.value = null;
+      await _storage.remove(LAST_DEVICE_ID_KEY);
+
+      // Show all paired devices again
+      await showSystemDevices();
 
       statusMessage.value = "Disconnected from ${getDeviceName(device)}";
     } catch (e) {
@@ -325,23 +387,5 @@ class BluetoothController extends GetxController {
     }
     // Exit the app
     exit(0);
-  }
-
-  @override
-  void onInit() async {
-    super.onInit();
-    // Request permissions first
-    if (await _requestPermissions()) {
-      // Try to enable Bluetooth if it's off
-      if (!await flutter_blue.FlutterBluePlus.isOn) {
-        try {
-          await flutter_blue.FlutterBluePlus.turnOn();
-        } catch (e) {
-          statusMessage.value = 'Please enable Bluetooth manually';
-        }
-      }
-      // Start scanning after permissions and Bluetooth check
-      showSystemDevices();
-    }
   }
 }

@@ -3,9 +3,11 @@ import 'package:get/get.dart';
 import 'screens/main_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'controllers/bluetooth_controller.dart';
+import 'package:get_storage/get_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await GetStorage.init();
   await requestPermissions();
 
   // Initialize controllers
