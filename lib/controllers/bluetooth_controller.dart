@@ -22,35 +22,56 @@ class BluetoothController extends GetxController {
   void onInit() async {
     super.onInit();
 
-    // Check if Bluetooth is on, if not request to turn it on
-    if (!await flutter_blue.FlutterBluePlus.isAvailable) {
-      statusMessage.value = "Bluetooth is not available on this device";
-      return;
-    }
-
-    if (!await flutter_blue.FlutterBluePlus.isOn) {
-      statusMessage.value = "Please turn on Bluetooth";
-      // Request to turn on Bluetooth
-      await flutter_blue.FlutterBluePlus.turnOn();
-      // Wait for Bluetooth to turn on
-      await Future.delayed(const Duration(seconds: 2));
-      if (!await flutter_blue.FlutterBluePlus.isOn) {
-        statusMessage.value = "Failed to turn on Bluetooth";
+    try {
+      // Check if Bluetooth is available on this device
+      if (!await flutter_blue.FlutterBluePlus.isAvailable) {
+        statusMessage.value = "Bluetooth is not available on this device";
         return;
       }
-    }
 
-    // Load last connected device ID
-    final lastDeviceId = _storage.read(LAST_DEVICE_ID_KEY);
-    if (lastDeviceId != null) {
-      // Try to find and connect to the last device
-      final pairedDevices = await flutter_blue.FlutterBluePlus.bondedDevices;
-      final lastDevice = pairedDevices.firstWhereOrNull(
-          (device) => device.remoteId.toString() == lastDeviceId);
-      if (lastDevice != null) {
-        lastConnectedDevice.value = lastDevice;
-        await connectToDevice(lastDevice);
+      // Check if Bluetooth is turned on
+      if (!await flutter_blue.FlutterBluePlus.isOn) {
+        statusMessage.value = "Please turn on Bluetooth";
+
+        // Try to turn on Bluetooth (this may not work on all devices)
+        try {
+          await flutter_blue.FlutterBluePlus.turnOn();
+          // Wait for Bluetooth to turn on
+          await Future.delayed(const Duration(seconds: 2));
+
+          // Check again if Bluetooth is now on
+          if (!await flutter_blue.FlutterBluePlus.isOn) {
+            statusMessage.value =
+                "Failed to turn on Bluetooth. Please turn it on manually.";
+            return;
+          }
+        } catch (e) {
+          statusMessage.value = "Please turn on Bluetooth manually";
+          return;
+        }
       }
+
+      // Load last connected device ID
+      final lastDeviceId = _storage.read(LAST_DEVICE_ID_KEY);
+      if (lastDeviceId != null) {
+        try {
+          // Try to find and connect to the last device
+          final pairedDevices =
+              await flutter_blue.FlutterBluePlus.bondedDevices;
+          final lastDevice = pairedDevices.firstWhereOrNull(
+              (device) => device.remoteId.toString() == lastDeviceId);
+          if (lastDevice != null) {
+            lastConnectedDevice.value = lastDevice;
+            await connectToDevice(lastDevice);
+          }
+        } catch (e) {
+          // If there's an error loading the last device, clear it
+          await _storage.remove(LAST_DEVICE_ID_KEY);
+          print('Error loading last device: $e');
+        }
+      }
+    } catch (e) {
+      statusMessage.value = "Error initializing Bluetooth: $e";
     }
   }
 
@@ -71,11 +92,44 @@ class BluetoothController extends GetxController {
   }
 
   Future<bool> _requestPermissions() async {
-    if (await Permission.bluetoothConnect.request().isGranted) {
-      return true;
+    try {
+      // Request Bluetooth permissions
+      final bluetoothConnectStatus =
+          await Permission.bluetoothConnect.request();
+      final bluetoothScanStatus = await Permission.bluetoothScan.request();
+
+      // Location permission is required for Bluetooth scanning on both platforms
+      final locationStatus = await Permission.location.request();
+
+      // Check if all required permissions are granted
+      if (bluetoothConnectStatus.isGranted &&
+          bluetoothScanStatus.isGranted &&
+          locationStatus.isGranted) {
+        return true;
+      }
+
+      // Handle permission denial
+      if (bluetoothConnectStatus.isDenied ||
+          bluetoothScanStatus.isDenied ||
+          locationStatus.isDenied) {
+        statusMessage.value = "Bluetooth and location permissions are required";
+        return false;
+      }
+
+      // Handle permanently denied permissions
+      if (bluetoothConnectStatus.isPermanentlyDenied ||
+          bluetoothScanStatus.isPermanentlyDenied ||
+          locationStatus.isPermanentlyDenied) {
+        statusMessage.value =
+            "Please enable Bluetooth and location permissions in settings";
+        return false;
+      }
+
+      return false;
+    } catch (e) {
+      statusMessage.value = "Error requesting permissions: $e";
+      return false;
     }
-    statusMessage.value = "Bluetooth permissions are required";
-    return false;
   }
 
   Future<void> showSystemDevices() async {

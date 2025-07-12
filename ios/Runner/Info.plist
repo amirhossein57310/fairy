@@ -54,5 +54,18 @@
 	<string>Need location permission for scanning Bluetooth devices</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Need location permission for scanning Bluetooth devices</string>
+	<!-- Background modes for Bluetooth and background processing -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+		<string>background-processing</string>
+		<string>background-fetch</string>
+	</array>
+	<!-- Additional capabilities -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>bluetooth-le</string>
+	</array>
 </dict>
 </plist>

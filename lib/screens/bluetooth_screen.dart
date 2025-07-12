@@ -378,6 +378,8 @@ class BluetoothScreen extends StatelessWidget {
         await device.disconnect();
       }
     }
+
+    // Platform-specific exit handling
     if (Platform.isAndroid) {
       // Android-specific: Remove task from recent apps and exit
       const platform = MethodChannel('com.fairy.app/system');
@@ -386,8 +388,16 @@ class BluetoothScreen extends StatelessWidget {
       } catch (e) {
         print('Error removing from recents: $e');
       }
+      // Force exit the app on Android
+      SystemNavigator.pop(animated: true);
+    } else if (Platform.isIOS) {
+      // iOS-specific: Just pop the app (iOS handles app lifecycle differently)
+      // Note: On iOS, apps don't typically "exit" - they go to background
+      // This will close the app gracefully
+      SystemNavigator.pop(animated: true);
+    } else {
+      // For other platforms, use the default behavior
+      SystemNavigator.pop(animated: true);
     }
-    // Force exit the app
-    SystemNavigator.pop(animated: true);
   }
 }
