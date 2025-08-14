@@ -4,8 +4,10 @@ import 'dart:io' show Platform;
 import 'package:get/get.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../controllers/bluetooth_controller.dart';
 import '../controllers/battery_controller.dart';
+import 'permission_status_screen.dart';
 
 class BluetoothScreen extends StatelessWidget {
   final BluetoothController controller = Get.find<BluetoothController>();
@@ -46,6 +48,11 @@ class BluetoothScreen extends StatelessWidget {
           title: const Text('Fairy Bluetooth'),
           actions: [
             IconButton(
+              icon: const Icon(Icons.security),
+              onPressed: () => Get.to(() => PermissionStatusScreen()),
+              tooltip: 'Permission Status',
+            ),
+            IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () => controller.showSystemDevices(),
             ),
@@ -67,37 +74,127 @@ class BluetoothScreen extends StatelessWidget {
           margin: const EdgeInsets.all(16),
           child: Card(
             elevation: 0,
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: _getStatusCardColor(theme),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.info_outline_rounded,
-                      color: theme.colorScheme.primary,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _getStatusIconColor(theme).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getStatusIcon(),
+                          color: _getStatusIconColor(theme),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          controller.statusMessage.value,
+                          style: theme.textTheme.bodyLarge,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      controller.statusMessage.value,
-                      style: theme.textTheme.bodyLarge,
+                  if (_isPermissionIssue()) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => controller.refreshPermissions(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Refresh Permissions'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () => _openSettings(),
+                          icon: const Icon(Icons.settings),
+                          label: const Text('Settings'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
           ),
         ));
+  }
+
+  Color _getStatusCardColor(ThemeData theme) {
+    if (_isPermissionIssue()) {
+      return Colors.orange.withOpacity(0.1);
+    } else if (_isError()) {
+      return Colors.red.withOpacity(0.1);
+    } else {
+      return theme.colorScheme.primary.withOpacity(0.1);
+    }
+  }
+
+  Color _getStatusIconColor(ThemeData theme) {
+    if (_isPermissionIssue()) {
+      return Colors.orange;
+    } else if (_isError()) {
+      return Colors.red;
+    } else {
+      return theme.colorScheme.primary;
+    }
+  }
+
+  IconData _getStatusIcon() {
+    if (_isPermissionIssue()) {
+      return Icons.security;
+    } else if (_isError()) {
+      return Icons.error_outline;
+    } else {
+      return Icons.info_outline_rounded;
+    }
+  }
+
+  bool _isPermissionIssue() {
+    final message = controller.statusMessage.value.toLowerCase();
+    return message.contains('permission') || message.contains('required');
+  }
+
+  bool _isError() {
+    final message = controller.statusMessage.value.toLowerCase();
+    return message.contains('error') || message.contains('failed');
+  }
+
+  // Method to open settings based on platform
+  Future<void> _openSettings() async {
+    if (Platform.isAndroid) {
+      // For Android, try to open app-specific settings
+      try {
+        await openAppSettings();
+      } catch (e) {
+        // Fallback to general settings
+        print('Error opening app settings: $e');
+        // You could also use a custom method to open Android settings
+      }
+    } else {
+      // For iOS, use the standard method
+      await openAppSettings();
+    }
   }
 
   Widget _buildDevicesList(ThemeData theme) {

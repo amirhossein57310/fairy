@@ -71,11 +71,44 @@ class BluetoothController extends GetxController {
   }
 
   Future<bool> _requestPermissions() async {
-    if (await Permission.bluetoothConnect.request().isGranted) {
+    try {
+      if (Platform.isAndroid) {
+        // For Android, check both Bluetooth and location permissions
+        if (!await Permission.bluetoothConnect.isGranted) {
+          final bluetoothConnectStatus =
+              await Permission.bluetoothConnect.request();
+          if (!bluetoothConnectStatus.isGranted) {
+            statusMessage.value =
+                "Bluetooth connect permission is required for Android. Please enable it in Settings > Apps > Fairy Bluetooth > Permissions > Bluetooth";
+            return false;
+          }
+        }
+
+        if (!await Permission.location.isGranted) {
+          final locationStatus = await Permission.location.request();
+          if (!locationStatus.isGranted) {
+            statusMessage.value =
+                "Location permission is required for Bluetooth scanning on Android. Please enable it in Settings > Apps > Fairy Bluetooth > Permissions > Location";
+            return false;
+          }
+        }
+      } else if (Platform.isIOS) {
+        // For iOS, only check Bluetooth permissions (like Dabble)
+        if (!await Permission.bluetooth.isGranted) {
+          final bluetoothStatus = await Permission.bluetooth.request();
+          if (!bluetoothStatus.isGranted) {
+            statusMessage.value =
+                "Bluetooth permission is required. Please enable it in Settings > Privacy & Security > Bluetooth";
+            return false;
+          }
+        }
+      }
+
       return true;
+    } catch (e) {
+      statusMessage.value = "Error checking permissions: $e";
+      return false;
     }
-    statusMessage.value = "Bluetooth permissions are required";
-    return false;
   }
 
   Future<void> showSystemDevices() async {
@@ -375,6 +408,65 @@ class BluetoothController extends GetxController {
       update(['bluetooth_status']);
     } finally {
       _giveMutex();
+    }
+  }
+
+  // Method to check current permission status
+  Future<Map<String, bool>> checkPermissionStatus() async {
+    final basePermissions = {
+      'bluetooth': await Permission.bluetooth.isGranted,
+      'bluetoothConnect': await Permission.bluetoothConnect.isGranted,
+      'bluetoothScan': await Permission.bluetoothScan.isGranted,
+    };
+
+    if (Platform.isAndroid) {
+      // Android needs location permission for Bluetooth scanning
+      basePermissions['location'] = await Permission.location.isGranted;
+      basePermissions['backgroundLocation'] =
+          await Permission.locationAlways.isGranted;
+      basePermissions['notifications'] =
+          await Permission.notification.isGranted;
+    }
+
+    return basePermissions;
+  }
+
+  // Method to force refresh permissions
+  Future<void> refreshPermissions() async {
+    statusMessage.value = "Checking permissions...";
+    final hasPermissions = await _requestPermissions();
+    if (hasPermissions) {
+      statusMessage.value = "All permissions granted!";
+      // Try to continue with Bluetooth operations
+      await _initializeBluetooth();
+    }
+  }
+
+  // Initialize Bluetooth after permissions are granted
+  Future<void> _initializeBluetooth() async {
+    try {
+      // Check if Bluetooth is on, if not request to turn it on
+      if (!await flutter_blue.FlutterBluePlus.isAvailable) {
+        statusMessage.value = "Bluetooth is not available on this device";
+        return;
+      }
+
+      if (!await flutter_blue.FlutterBluePlus.isOn) {
+        statusMessage.value = "Please turn on Bluetooth";
+        // Request to turn on Bluetooth
+        await flutter_blue.FlutterBluePlus.turnOn();
+        // Wait for Bluetooth to turn on
+        await Future.delayed(const Duration(seconds: 2));
+        if (!await flutter_blue.FlutterBluePlus.isOn) {
+          statusMessage.value = "Failed to turn on Bluetooth";
+          return;
+        }
+      }
+
+      statusMessage.value =
+          "Bluetooth is ready! Tap refresh to scan for devices.";
+    } catch (e) {
+      statusMessage.value = "Error initializing Bluetooth: $e";
     }
   }
 

@@ -5,6 +5,7 @@ import 'bluetooth_screen.dart';
 import 'schedule_screen.dart';
 import 'timer_screen.dart';
 import 'settings_screen.dart';
+import 'permission_status_screen.dart';
 
 class MainScreen extends StatelessWidget {
   MainScreen({super.key});
