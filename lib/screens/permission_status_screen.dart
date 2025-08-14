@@ -231,7 +231,8 @@ class PermissionStatusScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '• Bluetooth permissions are required to connect to your Fairy device\n'
-              '• Location permission is required on iOS for Bluetooth scanning\n'
+              '• Location permission is only required on Android for Bluetooth scanning\n'
+              '• iOS devices work like Dabble - only Bluetooth permission needed\n'
               '• If permissions are denied, you can enable them in Settings',
               style: theme.textTheme.bodyMedium,
             ),

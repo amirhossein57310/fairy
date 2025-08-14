@@ -18,7 +18,6 @@ void main() async {
 }
 
 Future<void> requestPermissions() async {
-<<<<<<< HEAD
   try {
     // Request Bluetooth permissions
     final bluetoothStatus = await Permission.bluetooth.request();
@@ -93,19 +92,6 @@ Future<bool> _isAndroid12OrHigher() async {
     print('Error detecting Android version: $e');
     return false;
   }
-=======
-  // Request Bluetooth permissions
-  await Permission.bluetooth.request();
-  await Permission.bluetoothConnect.request();
-  await Permission.bluetoothScan.request();
-
-  // Location permission is required for Bluetooth scanning on both platforms
-  await Permission.location.request();
-
-  // iOS-specific: Request additional permissions if needed
-  // Note: iOS 13+ requires explicit permission for Bluetooth scanning
-  // The permission_handler plugin handles this automatically
->>>>>>> 15673e73b08dceea444d6ee3e7b3f1af72c113ba
 }
 
 class MyApp extends StatelessWidget {

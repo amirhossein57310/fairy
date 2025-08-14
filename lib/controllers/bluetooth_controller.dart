@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as flutter_blue;
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:get_storage/get_storage.dart';
 
 class BluetoothController extends GetxController {
@@ -14,9 +14,6 @@ class BluetoothController extends GetxController {
       Rx<flutter_blue.BluetoothDevice?>(null);
   static const String LAST_DEVICE_ID_KEY = 'last_connected_device_id';
   final _storage = GetStorage();
-
-  bool _isLocked = false;
-  Completer<void>? _lock;
 
   @override
   void onInit() async {
@@ -75,25 +72,8 @@ class BluetoothController extends GetxController {
     }
   }
 
-  Future<void> _takeMutex() async {
-    while (_isLocked) {
-      _lock = Completer<void>();
-      await _lock?.future;
-    }
-    _isLocked = true;
-  }
-
-  void _giveMutex() {
-    _isLocked = false;
-    if (_lock != null && !_lock!.isCompleted) {
-      _lock!.complete();
-    }
-    _lock = null;
-  }
-
   Future<bool> _requestPermissions() async {
     try {
-<<<<<<< HEAD
       if (Platform.isAndroid) {
         // For Android, check both Bluetooth and location permissions
         if (!await Permission.bluetoothConnect.isGranted) {
@@ -129,7 +109,6 @@ class BluetoothController extends GetxController {
       return true;
     } catch (e) {
       statusMessage.value = "Error checking permissions: $e";
-=======
       // Request Bluetooth permissions
       final bluetoothConnectStatus =
           await Permission.bluetoothConnect.request();
@@ -165,7 +144,6 @@ class BluetoothController extends GetxController {
       return false;
     } catch (e) {
       statusMessage.value = "Error requesting permissions: $e";
->>>>>>> 15673e73b08dceea444d6ee3e7b3f1af72c113ba
       return false;
     }
   }
@@ -281,57 +259,6 @@ class BluetoothController extends GetxController {
     }
   }
 
-  Future<void> sendTestMessage(flutter_blue.BluetoothDevice device) async {
-    try {
-      if (!await _requestPermissions()) {
-        return;
-      }
-
-      if (!device.isConnected) {
-        statusMessage.value = 'Error: Device is not connected';
-        return;
-      }
-
-      statusMessage.value = 'Discovering services...';
-      final services = await device.discoverServices();
-
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write ||
-              characteristic.properties.writeWithoutResponse) {
-            statusMessage.value =
-                'Found writable characteristic. Sending test message...';
-
-            // Send "Hello ESP32" as bytes
-            List<int> data = [
-              72,
-              101,
-              108,
-              108,
-              111,
-              32,
-              69,
-              83,
-              80,
-              51,
-              50
-            ]; // "Hello ESP32"
-            await characteristic.write(data,
-                withoutResponse:
-                    characteristic.properties.writeWithoutResponse);
-
-            statusMessage.value = 'Test message sent successfully!';
-            return;
-          }
-        }
-      }
-
-      statusMessage.value = 'Error: No writable characteristic found';
-    } catch (e) {
-      statusMessage.value = 'Error sending test message: $e';
-    }
-  }
-
   Future<void> sendBatteryInfo(flutter_blue.BluetoothDevice device,
       int currentBattery, int targetBattery) async {
     try {
@@ -388,64 +315,9 @@ class BluetoothController extends GetxController {
     }
   }
 
-  Future<void> sendZero(flutter_blue.BluetoothDevice device) async {
-    try {
-      await _takeMutex();
-      final state = await device.connectionState.first;
-      if (state != flutter_blue.BluetoothConnectionState.connected) {
-        throw Exception('Device is not connected');
-      }
-
-      final services = await device.discoverServices();
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write) {
-            await characteristic.write([0], withoutResponse: false);
-            update(['bluetooth_status']);
-            return;
-          }
-        }
-      }
-      throw Exception('No writable characteristic found');
-    } catch (e) {
-      print('Error sending zero: $e');
-      update(['bluetooth_status']);
-    } finally {
-      _giveMutex();
-    }
-  }
-
-  Future<void> sendOne(flutter_blue.BluetoothDevice device) async {
-    try {
-      await _takeMutex();
-      final state = await device.connectionState.first;
-      if (state != flutter_blue.BluetoothConnectionState.connected) {
-        throw Exception('Device is not connected');
-      }
-
-      final services = await device.discoverServices();
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.write) {
-            await characteristic.write([1], withoutResponse: false);
-            update(['bluetooth_status']);
-            return;
-          }
-        }
-      }
-      throw Exception('No writable characteristic found');
-    } catch (e) {
-      print('Error sending one: $e');
-      update(['bluetooth_status']);
-    } finally {
-      _giveMutex();
-    }
-  }
-
   Future<void> sendString(
       flutter_blue.BluetoothDevice device, String value) async {
     try {
-      await _takeMutex();
       final state = await device.connectionState.first;
       if (state != flutter_blue.BluetoothConnectionState.connected) {
         throw Exception('Device is not connected');
@@ -465,8 +337,6 @@ class BluetoothController extends GetxController {
     } catch (e) {
       print('Error sending string: $e');
       update(['bluetooth_status']);
-    } finally {
-      _giveMutex();
     }
   }
 
@@ -527,16 +397,5 @@ class BluetoothController extends GetxController {
     } catch (e) {
       statusMessage.value = "Error initializing Bluetooth: $e";
     }
-  }
-
-  void closeApp() {
-    // Disconnect all devices before closing
-    for (var device in devices) {
-      if (device.isConnected) {
-        device.disconnect();
-      }
-    }
-    // Exit the app
-    exit(0);
   }
 }
