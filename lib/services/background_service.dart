@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:battery_plus/battery_plus.dart';
@@ -35,6 +36,9 @@ class BackgroundService {
 
   @pragma('vm:entry-point')
   static Future<bool> onIosBackground(ServiceInstance service) async {
+    // iOS background processing is limited
+    // This method is called when the app goes to background
+    // Return true to keep the service alive
     return true;
   }
 
@@ -44,6 +48,7 @@ class BackgroundService {
     _isServiceRunning = true;
 
     if (service is AndroidServiceInstance) {
+      // Android-specific service handling
       service.on('setAsForeground').listen((event) {
         service.setAsForegroundService();
       });
@@ -55,7 +60,7 @@ class BackgroundService {
       service.on('stopService').listen((event) async {
         _isServiceRunning = false;
         _timer?.cancel();
-        await service.stopSelf(); // اینجا متد صحیح برای توقف سرویسه
+        await service.stopSelf();
       });
 
       _timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
@@ -75,11 +80,37 @@ class BackgroundService {
           'timestamp': DateTime.now().toIso8601String(),
         });
       });
+    } else {
+      // iOS service handling (limited background execution)
+      service.on('stopService').listen((event) async {
+        _isServiceRunning = false;
+        _timer?.cancel();
+      });
+
+      // iOS background services are more limited
+      // We can still monitor battery but with restrictions
+      _timer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+        if (!_isServiceRunning) {
+          timer.cancel();
+          return;
+        }
+
+        try {
+          final batteryLevel = await battery.batteryLevel;
+          service.invoke('update', {
+            'battery_level': batteryLevel,
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          // Handle errors gracefully on iOS
+          print('Background service error on iOS: $e');
+        }
+      });
     }
   }
 
   static Future<void> stop() async {
     final service = FlutterBackgroundService();
-    service.invoke("stopService"); // این دستور متد stop رو تریگر میکنه
+    service.invoke("stopService");
   }
 }
