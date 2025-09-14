@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../controllers/bluetooth_controller.dart';
 import 'bluetooth_screen.dart';
 import 'schedule_screen.dart';
 import 'timer_screen.dart';
 import 'settings_screen.dart';
-import 'permission_status_screen.dart';
+// import 'permission_status_screen.dart';
+import '../services/language_service.dart';
 
 class MainScreen extends StatelessWidget {
   MainScreen({super.key});
@@ -14,7 +14,7 @@ class MainScreen extends StatelessWidget {
   final List<Widget> screens = [
     BluetoothScreen(),
     const ScheduleScreen(),
-    const TimerScreen(),
+    TimerScreen(),
     const SettingsScreen(),
   ];
 
@@ -66,25 +66,25 @@ class MainScreen extends StatelessWidget {
                 items: [
                   _buildNavItem(
                     icon: Icons.battery_charging_full_rounded,
-                    label: 'Charge',
+                    label: LanguageService.to.getLocalizedText('Charge'),
                     index: 0,
                     theme: theme,
                   ),
                   _buildNavItem(
                     icon: Icons.schedule_rounded,
-                    label: 'Schedule',
+                    label: LanguageService.to.getLocalizedText('Schedule'),
                     index: 1,
                     theme: theme,
                   ),
                   _buildNavItem(
                     icon: Icons.timer_rounded,
-                    label: 'Timer',
+                    label: LanguageService.to.getLocalizedText('Timer'),
                     index: 2,
                     theme: theme,
                   ),
                   _buildNavItem(
                     icon: Icons.settings_rounded,
-                    label: 'Settings',
+                    label: LanguageService.to.getLocalizedText('Settings'),
                     index: 3,
                     theme: theme,
                   ),

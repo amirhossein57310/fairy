@@ -1,0 +1,29 @@
+{
+  "appTitle": "اندروید فری",
+  "settings": "تنظیمات",
+  "additionalSettings": "تنظیمات اضافی",
+  "controlFile": "فایل کنترل",
+  "faqs": "سوالات متداول",
+  "contactUs": "تماس با ما",
+  "about": "درباره",
+  "language": "زبان",
+  "share": "اشتراک‌گذاری",
+  "rate": "امتیاز",
+  "supportUs": "حمایت از ما",
+  "english": "English",
+  "persian": "فارسی",
+  "home": "خانه",
+  "status": "وضعیت",
+  "version": "نسخه ۳.۵",
+  "additionalSettingsDescription": "تنظیمات اضافی در اینجا پیاده‌سازی خواهد شد.",
+  "controlFileDescription": "تنظیمات فایل کنترل در اینجا پیاده‌سازی خواهد شد.",
+  "faqsDescription": "سوالات متداول در اینجا نمایش داده خواهد شد.",
+  "contactUsDescription": "اطلاعات تماس در اینجا نمایش داده خواهد شد.",
+  "aboutDescription": "یک برنامه هوشمند کنترل بلوتوث.",
+  "supportUsDescription": "گزینه‌های پشتیبانی در اینجا نمایش داده خواهد شد.",
+  "shareMessage": "این برنامه شگفت‌انگیز اندروید فری را بررسی کنید!",
+  "shareSubject": "برنامه اندروید فری"
+}
+
+
+

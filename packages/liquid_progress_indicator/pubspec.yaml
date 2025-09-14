@@ -1,0 +1,17 @@
+name: liquid_progress_indicator
+description: Local override providing LiquidLinearProgressIndicator compatible with Flutter 3.22
+version: 0.4.0+local
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  uses-material-design: false
+
+

@@ -1,0 +1,29 @@
+{
+  "appTitle": "Fairy Android",
+  "settings": "Settings",
+  "additionalSettings": "Additional Settings",
+  "controlFile": "Control File",
+  "faqs": "FAQs",
+  "contactUs": "Contact us",
+  "about": "About",
+  "language": "Language",
+  "share": "Share",
+  "rate": "Rate",
+  "supportUs": "SUPPORT US",
+  "english": "English",
+  "persian": "فارسی",
+  "home": "Home",
+  "status": "Status",
+  "version": "v3.5",
+  "additionalSettingsDescription": "Additional settings will be implemented here.",
+  "controlFileDescription": "Control file settings will be implemented here.",
+  "faqsDescription": "Frequently asked questions will be displayed here.",
+  "contactUsDescription": "Contact information will be displayed here.",
+  "aboutDescription": "A smart Bluetooth control application.",
+  "supportUsDescription": "Support options will be displayed here.",
+  "shareMessage": "Check out this amazing Fairy Android App!",
+  "shareSubject": "Fairy Android App"
+}
+
+
+

@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'controllers/bluetooth_controller.dart';
 import 'package:get_storage/get_storage.dart';
 import 'dart:io' show Platform;
+import 'services/language_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,8 @@ void main() async {
 
   // Initialize controllers
   Get.put(BluetoothController());
+  // Initialize language service for settings and localization
+  Get.put(LanguageService());
 
   runApp(const MyApp());
 }
@@ -102,6 +105,11 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Fairy Bluetooth',
+      // Keep UI position LTR regardless of selected locale
+      builder: (context, child) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: child!,
+      ),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
